@@ -1,0 +1,109 @@
+## 关闭隐式动画
+
+```swift
+CATransaction.begin()
+CATransaction.setDisableActions(true)
+self.layer.frame = self.bounds
+CATransaction.commit()
+```
+<!--more-->
+## AVPlayer出现一直缓存，缓存一段时间之后才开始播放的问题
+```swift
+player.automaticallyWaitsToMinimizeStalling = false//延迟播放，默认开
+```
+关于这个属性的一些说明：
+>In versions of iOS prior to iOS 10.0 and versions of OS X prior to 10.12, this property is unavailable, and the behavior of the AVPlayer corresponds to the type of content being played. For streaming content, including HTTP Live Streaming, the AVPlayer acts as if automaticallyWaitsToMinimizeStalling is YES. For file-based content, including file-based content accessed via progressive http download, the AVPlayer acts as if automaticallyWaitsToMinimizeStalling is NO.
+
+大致是说在iOS10之前的客户端，虽然这个参数不可用，但是非流媒体类型的播放这个配置默认为false，所以在iOS10下建议这个属性值为false。
+
+## AVPlayer是否正在播放的判断
+当我们使用KVO监听player.rate来判断player的是否正在播放时，会发现这个值是不准的。其实准确的说是`player.rate=1`不代表正在播放，`player.rate=0`是可以代表正在暂停的。所以`player.rate=0`代表暂停，正在播放的状态可以这样判断：
+```swift
+self.timeObserve = self.player.addPeriodicTimeObserver(forInterval: CMTimeMake(1, 1),
+queue: DispatchQueue.main,
+using: {(time) in
+if self.player.timeControlStatus == AVPlayerTimeControlStatus.playing {
+//AVPlayerTimeControlStatus为iOS之后的API
+self.state = .playing
+}
+})
+```
+
+## 下载时URLSessionConfiguration的配置
+使用Alamofire下载时，我们通常需要一个`SessionManager`配置下载参数：
+```swift
+let configuration = URLSessionConfiguration.default
+configuration.timeoutIntervalForRequest = 50//50s超时
+/** 最大同时下载数 ---- iOS对于同一个IP服务器的并发最大默认为4，OS X为6 */
+configuration.httpMaximumConnectionsPerHost = 4
+/** A Boolean value that indicates whether TCP connections should be kept open when the app moves to the background. */
+configuration.shouldUseExtendedBackgroundIdleMode = true//为true支持后台下载
+manager = Alamofire.SessionManager(configuration: configuration)
+```
+## 不要存储沙盒绝对地址
+当我们向沙盒写入数据时，将该绝对路径保存下来，下次再打开该地址并不会获取到我们存入的数据。原因如下：
+
+iOS8之后，苹果添加的新特性，将每次打开app内的沙盒［唯一编码路径］（红框部分）重新生成，并保持上一次的沙盒文件（Documents、Library、tmp）移到新生成的文件内，旧文件删除，就是说，你保存的文件都在，只不过每次打开后，都会有一个新的绝对路径。
+![localPath.png](https://ws2.sinaimg.cn/large/006tKfTcgy1ftvc9rh18lj30gu080wk9.jpg)
+所以存储路径应该存相对路径：
+```swift
+//这两个都代表document的相对路径
+let rootPath = NSHomeDirectory() + "/Documents/"
+let rootPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first
+```
+## childViewController的viewDidAppear方法调用
+如果一个ViewController中嵌套了多个childViewController。当宿主VC（我们暂且这么称呼它）调用viewDidAppear等方法时，其中的childViewController都会默认调用对应方法。如果我们不想childViewController调用该方法可以重写该VC的属性：
+
+```swift
+override var shouldAutomaticallyForwardAppearanceMethods: Bool {
+return false
+}
+```
+
+## 图片切换渐入渐出的方法
+通过`UIImageView`展示图片和`layer.contents`展示图片都可以使用以下方法：
+
+```objc
+let transition = CATransition()
+transition.duration = 0.5
+transition.type = kCATransitionFade
+self.view.layer.add(transition, forKey: "layer.contents")
+self.view.layer.contents = image.cgImage//适用于imageView
+```
+
+## cell移出视图，移入视图的方法
+
+```swift
+//TableViewCell
+override func prepareForReuse() {
+super.prepareForReuse()//使用重用池的cell,显示过的cell移至可视范围
+}
+//TableView
+func tableView(_ tableView: UITableView, didEndDisplaying cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+//cell移出视图时调用
+}
+```
+
+## tableview,collectionView数据reload之后的操作
+我们如果要想实现在reload之后弹出alertView，或者滚动到特定一行，可能会直接写：
+```swift
+tableView.reloadData()
+tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+```
+看似没问题，但是滚动没起作用，因为reloadData是立即返回的，不会等tableview刷新完成。
+解决办法就是需要等reload完成之后再做我们需要的操作，reload是否完成有几种方式监听：
+```swift
+//collectionView
+collectionView.performBatchUpdates(nil) { (finished) in
+    //reload完成
+}
+//tableView方法只有iOS11可用
+tableView.performBatchUpdates(nil) { (finished) in
+    //reload完成
+}//替代func beginUpdates()，func endUpdates()
+//tableView等reload完成还可以使用
+tableView.reloadData()
+DispatchQueue.main.async {
+    //reload完成
+}
+```

@@ -1,0 +1,140 @@
+## 数据库用完要close
+当我们向下面这样执行完一次数据可查询时，要记得将数据库关闭，否则，如果此时想往同一数据库写东西的话会因为数据正在锁定收到这样的提示`database is locked`。
+```swift
+//获取下载完成的文件信息
+    func isExistdWith(_ id: String) -> Bool{
+        guard db.open() else {
+            return false
+        }
+        do {
+            let resultSet = try db.executeQuery("select * from tableName where id = ?", values: [id])
+            if resultSet.next() {
+
+                let isCompleted = resultSet.bool(forColumn: self.isCompleted)
+                db.close()//return之前要close数据库
+                return isCompleted
+            }
+        } catch {
+
+        }
+        db.close()//return之前要close数据库
+        return false
+    }
+```
+
+## UIDatePicker的时间格式
+当我们用UIDatePicker做选择时间的控件时，DatePicker会根据手机时间的设置自动选择是12小时制还是24小时制，如果我们需要强制控制DatePicker是显示12小时制还是24小时制可以这么做：
+```swift
+datePicker.datePickerMode = .time
+datePicker.locale = Locale.init(identifier: "en_GB")//for 24 Hrs
+datePicker.locale = Locale.init(identifier: "en_US")//for 12 Hrs
+```
+## iOS skill map
+![iOS技能图谱](http://upload-images.jianshu.io/upload_images/1059465-3576096c29667cf8.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+## 变量对外只读，对内可读写
+```swift
+struct Person {
+    private(set) var name : String!
+}
+```
+## 设置UITableViewCell分割线对齐
+默认的cell分割线都是偏向右边多一些的，如果我们想让分割线对齐的话，正确的做法是：
+```swift
+tableView.separatorInset = UIEdgeInsets.init(top: 0, left: 40, bottom: 0, right: 40)
+```
+设置左右边距都是40
+但是使用这种方法会带来一个问题就是默认的textLabel会跟着右移。为了保持label的居中我们可以再加一句：
+```swift
+tableView.separatorInset = UIEdgeInsets.init(top: 0, left: 40, bottom: 0, right: 40)
+tableView.layoutMargins = UIEdgeInsets.init(top: 0, left: 40, bottom: 0, right: 40)
+```
+
+## 富文本显示图片元素
+如果我们需要文字中插入图片元素时，可以使用富文本处理：
+```swift
+let attch = NSTextAttachment()
+attch.image = UIImage.(named:"logo")
+attch.bounds = CGRect.init(x: 0, y: 0, width: 18, height: 18)
+let imageAttribute = NSAttributedString(attachment: attch)
+titleLabel.attributedText = attributed
+```
+
+## 添加spotlight搜索索引
+首先导入`CoreSpotlight`和`MobileCoreServices`框架，然后加入以下代码：
+
+```swift
+var searchableItems = [CSSearchableItem]()
+//索引项
+let attributeSet = CSSearchableItemAttributeSet(itemContentType: kUTTypeData as String)
+//title
+attributeSet.title = "Item Title"
+//desription
+attributeSet.contentDescription = "match.description"
+//thumb
+attributeSet.thumbnailData = try? Data.init(contentsOf: URL(string: url)!)
+//keywords
+attributeSet.keywords = ["Love", "Peace"]
+let searchableItem = CSSearchableItem(uniqueIdentifier: "app_keywords", domainIdentifier: "com.company.app", attributeSet: attributeSet)
+searchableItems.append(searchableItem)
+//建立索引
+CSSearchableIndex.default().indexSearchableItems(searchableItems) { (error) -> Void in
+        if error != nil {
+              print(error?.localizedDescription ?? "Error")
+            }
+        }
+```
+
+## Hexo编译问题
+在执行`hexo g`编译markdown文件时莫名报错：
+```
+TypeError: Cannot set property 'lastIndex' of undefined
+```
+解决方案是在_config.yml中将`auto_detect`设为`false`
+
+## Podfile用法
+```ruby
+# 下面两行是指明依赖库的来源地址
+source 'https://github.com/CocoaPods/Specs.git'
+source 'https://github.com/Artsy/Specs.git'
+
+# 说明平台是ios，版本是8.0
+platform :ios, '8.0'
+
+# 忽略引入库的所有警告（强迫症者的福音啊）
+inhibit_all_warnings!
+
+# 生成的是framework而不是静态库
+use_frameworks!
+
+# 针对MyApp target引入AFNetworking
+# 针对MyAppTests target引入OCMock，
+target 'MyApp' do
+    pod 'AFNetworking', '~> 3.0'
+    target 'MyAppTests' do
+       inherit! :search_paths
+       pod 'OCMock', '~> 2.0.1'
+    end
+    pod 'JSONKit', :podspec => 'https://example.com/JSONKit.podspec'
+    # 引入内部库
+    pod 'ABTest', :git => 'https://bitbucket.org/sealcn/remoteabtest.git'
+    pod 'ABTest', :git => 'https://bitbucket.org/sealcn/remoteabtest.git', :tag=> '0.0.6'
+    pod 'ABTest', :git => 'https://bitbucket.org/sealcn/remoteabtest.git', :commit=> '082f8319af'
+    # 编译配置，指定仅在Debug模式下启用
+    pod 'Reveal-SDK', :configurations => ['Debug']
+    # 使用本地文件
+    pod 'AFNetworking', :path => '~/Documents/AFNetworking'
+    # 指定版本号0.1.3到0.2，不包括0.2
+    pod 'CHIPageControl', '~> 0.1.3'
+    # 仅安装QueryKit下的Attribute和QuerySet模块
+pod 'QueryKit', :subspecs => ['Attribute', 'QuerySet']
+
+
+end
+# 这个是cocoapods的一些配置,官网并没有太详细的说明,一般采取默认就好了,也就是不写.
+post_install do |installer|
+   installer.pods_project.targets.each do |target|
+     puts target.name
+   end
+end
+```

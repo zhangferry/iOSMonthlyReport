@@ -1,0 +1,129 @@
+
+![iPhoneX R](https://upload-images.jianshu.io/upload_images/1059465-2711b521a2b371fc.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+新机发布，你中意XS Max还是XR？
+## iOS Tips
+---
+### 在label中插入图片
+```swift
+let label = UILabel()
+let attribute = NSMutableAttributedString(string: "Title")
+
+let imgAttch = NSTextAttachment()
+imgAttch.image = image
+//设置图片大小
+imgAttch.bounds = CGRect.init(x: 0, y: 0, width: 18, height: 15)
+let imageAttribute = NSAttributedString(attachment: imgAttch)
+//图片插入位置
+attribute.insert(imageAttribute, at: 0)
+label.attributedText = attribute
+```
+
+### CollectionCell阴影+圆角的优雅处理方式
+只针对类似App Store的整体圆角阴影的效果。
+```swift
+//设置父视图阴影效果
+//CollectionView.swift
+self.layer.shadowOffset = offset
+self.layer.shadowColor = color.cgColor
+self.layer.shadowRadius = radius
+self.layer.shadowOpacity = opacity
+contentView.layer.cornerRadius = radius
+//如果切割圆角带imageView才需要添加下面
+contentView.layer.masksToBounds = true
+```
+### 处理tableView点击时label背景色消失问题
+```swift
+//第一种方式，UITableViewCell.swift
+override func setHighlighted(_ highlighted: Bool, animated: Bool) {
+   let color = self.indexLabel.backgroundColor
+   super.setHighlighted(highlighted, animated: animated)
+   self.indexLabel.backgroundColor = color
+}
+//第二种方式
+cell.textLabel.backgroundColor = UIColor.clear
+cell.textLabel.layer.backgroundColor = UIColor.red
+```
+
+### 调整UILabel文字的内边距
+自定义`UILabel`，然后重写`drawText:`方法
+```swift
+override func drawText(in rect: CGRect) {
+    let insets = UIEdgeInsets.init(top: 20, left: 20, bottom: 20, right: 20)
+    super.drawText(in: UIEdgeInsetsInsetRect(rect, insets))
+}
+```
+
+### swift 浮点数取整
+ceil(x)返回不小于x的最小整数值。
+floor(x)返回不大于x的最大整数值。
+round(x)返回x的四舍五入整数值。
+```swift
+let number1 = 12.456
+// ceil(number1) = 13.0, floor(number1) = 12.0, round(number1) = 12.0
+let number2 = 12.756
+// ceil(number2) = 13.0, floor(number2) = 12.0, round(number2) = 13.0
+```
+
+### 跳过非store下载的应用检查
+
+xattr -d com.apple.quarantine app所在路径
+
+### 加载大图导致内存暴涨
+`large_leaves_70mp.jpg`图片是7033x10110(占用磁盘大小8.3MB)，分辨率 = 7033 x 10110 x 4（ARGB）,对应位图占用大小 = 分辨率 x 1024 x 1024 ( = 271MB)，解压会把图片转成位图，也就意味着会占用271MB内存，所以解压过程内存会瞬间消耗很大,等转成NSData后位图的内存就会被回收掉，内存就降下来，这时候NSData占用的大小即是图片的实际大小，该过程中由于会转成位图，而位图的大小是比图片的实际的大小大很多的，内存暴增的点就在位图。位图的内存大小计算是根据图片的分辨率而来（分辨率(width x heigth) x 1024 x 1024  x 4 (ARGB)），所以一般来说图片分辨率越高转成的位图占用的内存空间越大。
+
+### 新版iphone尺寸
+| 设备 | 逻辑分辨率 | 比例因子 | 对角线 | 分辨率 |
+| ------ | ------ | :------: | ------ | :------: |
+| iPhone XS Max | 414×896 | @3x |6.5inch|1242px × 2688px|
+| iPhone XS | 375×812 | @3x |5.8inch|1125px × 2436px|
+| iPhone XR | 414×896 | @2x |6.1inch|	828px × 1792px|
+| iPhone X | 375×812 | @3x |5.8inch|	1125px × 2436px|
+| iPhone 8 Plus | 414×736 | @3x |5.5inch|1242px × 2208px|
+| iPhone 8 | 375×667 | @3x |4.7inch|	750px × 1334px|
+| iPhone SE | 320×568 | @2x |4inch|	640px × 1136px|
+| iPhone 4 | 320×480 | @2x |3.5inch|640px × 960px|
+
+### 带透明度的渐变
+使用CAGradientLayer进行渐变的时候，如果我们需要由一个颜色渐变至透明，当我们将透明色写成`UIColor.clear`或者其他通过`RGBA`设置的颜色，改变透明度为0时，会发现实际效果跟预期有出入，会带点黑色：
+![Transparent gradient.png](https://upload-images.jianshu.io/upload_images/1059465-5bf477719013367f.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+这是因为clearColor会有一个透明度为0的黑色通道。所以应该这样设置透明色：
+```
+UIColor(white: 1, alpha: 0).cgColor
+```
+
+### 指定tableView，collectionView的header高度0
+如果我们想隐藏`headerView`可能会直接在其高度的代理方法，做如下设置：
+```
+func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+    return 0
+}
+```
+当实际上这并不会生效，会返回一个默认高度。也就是说这个高度只有设置成一个非0的正数才是有效的。
+有些人会写成0.01，表面上看是解决问题了，但0.01的偏移会造成像素不对齐（Color Misaligned Images），加重CPU计算负荷。完美的解决方案是：
+```
+func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+    return CGFloat.leastNonzeroMagnitude
+}
+```
+`CGFloat.leastNonzeroMagnitude`表示CGFloat支持的最小正数值，不会引起像素偏移。
+
+### 保持屏幕常亮
+```swift
+//保持屏幕常亮
+UIApplication.shared.isIdleTimerDisabled = true
+//关闭屏幕常亮
+UIApplication.shared.isIdleTimerDisabled = false
+```
+注意：不要滥用屏幕常亮属性（苹果会因为这打回你的app），如果只在某些特殊场合需要屏幕常亮，应该在之后将该值恢复成默认值`false`。
+## Github
+----
+### [MMKV](https://github.com/Tencent/MMKV)
+MMKV 是基于 mmap 内存映射的 key-value 组件，底层序列化/反序列化使用 protobuf 实现，性能高，稳定性强。从 2015 年中至今，在 iOS 微信上使用已有近 3 年，其性能和稳定性经过了时间的验证。近期也已移植到 Android 平台，一并开源。
+替代`UserDefaults`的绝佳方案。
+###[Lottie](https://github.com/airbnb/lottie-ios)
+Lottie是一个面向Android和iOS的移动库，它能够解析由AE在bodymovin导出为json的效果动画，并在移动端渲染矢量动画!
+一些复杂的UI可以完全交给设计师了，哈哈哈。
+###[RSSHud](https://github.com/DIYgod/RSSHub)
+RSSHub 是一个轻量、易于扩展的 RSS 生成器，可以给任何奇奇怪怪的内容生成 RSS 订阅源。
+结合[Reeder](https://itunes.apple.com/us/app/reeder-3/id697846300?mt=8)不要太爽哦。😆

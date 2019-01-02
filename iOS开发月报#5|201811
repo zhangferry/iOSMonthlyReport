@@ -1,0 +1,146 @@
+## 大事件
+---
+11月27号，苹果AppStore下架包括拼多多、搜狗地图、讯飞阅读和悦跑圈在内的共718个App。据称下架原因是触发了AppStroe审核指南的2.5.2条例，即使用了热更新技术。去年6月份，苹果层因热更新下架数万款App。
+![C6D6A56886BF8346FA56A046C2BEE023.jpg](https://upload-images.jianshu.io/upload_images/1059465-14aacc2395523d81.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+## Tips
+### 图片渲染开销
+
+我们知道，解压后的图片是由无数像素数据组成。每个像素点通常包括红、绿、蓝和 alpha 数据，每个值都是 8 位（0–255），因此一个像素通常会占用 4 个字节（32 bit per pixel。少数专业的 app 可能会用更大的空间来表示色深，消耗的内存会相应线性增加）。
+
+下面我们来计算一些通常的图片开销：
+
+普通图片大小，如 500 * 600 * 32bpp = 1MB
+跟 iPhone X 屏幕一样大的：1125 * 2436 * 32bpp = 10MB
+即刻中允许最大的图片，总像素不超过1500w：15000000 * 32bpp = 57MB
+有了大致的概念，以后看到一张图能简单预估，大概会吃掉多少内存。
+
+### 关于iOS开发证书在钥匙串没有秘钥的问题
+当前现象
+![D9E4F2DFEAAA7AB5D4CEC1A380A8221E.jpg](https://upload-images.jianshu.io/upload_images/1059465-20f6c5844ca97977.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+只需要将证书拖到登录，即可生成秘钥
+![B91143F5C7B2BEA07FAF8849766D163E.jpg](https://upload-images.jianshu.io/upload_images/1059465-a0cd997865427e88.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+
+### APP内切换语言
+APP内切换语言有一种比较简单的实现方式，实现步骤是：
+1、存储语言状态
+2、刷新`KeyWindow.rootViewController`
+3、刷新`Bundle`
+4、切换语言对应的更新操作
+实现过程：
+```swift
+//1、切换语言，AppleLanguages对应内容是数组，语言符合可以通过Bundle.main.localizations查看
+//切换至繁体中文，存储状态
+UserDefaults.standard.set(["zh-Hant"], forKey: "AppleLanguages")
+//2、刷新keyWindow，createRootViewController为创建rootViewController的方法
+UIApplication.shared.keyWindow?.rootViewController = Application.shared.createRootViewController()
+
+//3、更换bundle
+//在切换语言的时候，我们需要执行一下，Bundle的exchangeBundle方法
+extension Bundle {
+    static func getLocalizedBundle() -> Bundle {
+        if let languages = UserDefaults.standard.object(forKey: "AppleLanguages") as? [String],
+                let lan = languages.first,
+                let path = Bundle.main.path(forResource: lan, ofType: "lproj"),
+                let bundle = Bundle.init(path: path){
+                return bundle
+            } else {
+                return Bundle.main
+            }
+    }
+    static func exchangeBundle(){
+        //替换Bundle.main为自定义的BundleLocal
+        object_setClass(Bundle.main, BundleLocal.self)
+    }
+}
+
+class BundleLocal: Bundle {
+    override func localizedString(forKey key: String, value: String?, table tableName: String?) -> String {
+        return Bundle.getLocalizedBundle().localizedString(forKey: key, value: value, table: tableName)
+    }
+}
+
+
+//4、其他更新操作，如接口，UI界面
+```
+
+### 测试内购时长
+当我们测试内购时，需要考虑内购到期的情况。比如我测试购买了一个月的服务，那么购买到期的情况呢，不能傻傻地等一个月时间吧？
+其实苹果给出了不同内购时长在Debug情况下对应的测试时间。
+![04DF44800E5F07286951E4BE11342A89.jpg](https://upload-images.jianshu.io/upload_images/1059465-259f75d94a813ac2.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+### AVPlayer进入前台自动播放
+在我们不进行任何前后台设置的情况下，AVPlayer进入后台，会自动暂停播放。再次回到前台时，播放器会有一定概率自动恢复播放（多大概率未知，测试得出的结论）。
+
+如果这个恢复播放不是我们需要的，或者我们需要避免这种不确定的情况发生，我们可以手动管理这个过程：
+```swift
+NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: self, queue: nil) { (notification) in
+      self.player.pause()
+}
+
+NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: self, queue: nil) { (notification) in
+    //根据需要是否需要恢复播放
+    if shouleRecoverPlayer {
+        self.player.play()
+    } else {
+        self.player.pause()
+    }
+
+}
+```
+
+### iOS12.1关于tabbar的一个bug
+**触发条件：**
+* 使用 `UITabBarController` + `UINavigationController` 组合
+* `UITabBar`带半透明效果，`isTranslucent` 属性为 true
+* `UIViewController`的 `hidesBottomBarWhenPushed` 属性为 true
+* 通过导航栏返回上一页时(导航栏返回按钮 or 屏幕左侧的滑动返回手势)
+
+**问题现象：**
+![20181112163203240.gif](https://upload-images.jianshu.io/upload_images/1059465-01da29cdb1811251.gif?imageMogr2/auto-orient/strip)
+
+经确认是iOS12.1上的一个bug。
+**解决方案：**
+```swift
+//MARK: - fix ios12.1 tabbar bug
+let tabbar = UITabBar.appearance()
+tabbar.isTranslucent = false
+```
+详细内容可以参考：
+[修复 iOS12.1 UITabBar 布局位移bug - ZHFDBK的博客 - CSDN博客](https://blog.csdn.net/ZHFDBK/article/details/83994088)
+[swift - UITabBar items jumping on back navigation on iOS 12.1 - Stack Overflow](https://stackoverflow.com/questions/53084806/uitabbar-items-jumping-on-back-navigation-on-ios-12-1)
+
+## 推荐内容
+
+### [重构Swift中的Identifiers](https://medium.com/@vatsalrustagi/ios-refactoring-in-swift-identifiers-b14d9fff20c3)
+面对越来越多的identifier，改如何优雅地处理？
+文中讲了一些`UITableViewCell`、`UICollectionViewCell`、`segues`、`UIStoryboards`、`UIViewController`中关于identifiers的重构方法。
+
+### [The End Is Near for Mobile Apps](https://medium.com/s/story/mobile-apps-will-disappear-soon-4b4e54f46eb8)
+移动应用的末日将要来临？
+Medium科技板块最近比较火的一篇文章，分上下两篇，讲述移动应用的前景和趋势。
+
+### [Realm学院](https://academy.realm.io/cn/)
+这是Realm建立的一个用于学习编程技术的网站，主要方式是视频，内容配有字幕，并且都全部整理成文章。涵盖范围有`Realm`, `Android`, `iOS`, `JavaScript`, `Architecture`等。
+
+文章质量非常高！
+
+
+## 开发利器
+### [KTVHTTPCache](https://github.com/ChangbaDevs/KTVHTTPCache)
+
+应该是iOS端目前最好的流媒体缓存框架了。
+
+### [Realm](https://realm.io/)
+Realm是一个开源的对象数据库管理系统，最初用于移动(Android/iOS)，也可用于`Xamarin`或`React Native`等平台，等平台，包括桌面应用(Windows)，并获得`Apache`许可。
+
+对比FMDB，他的使用成本，维护成本都更低。
+
+### [uTools](https://u.tools/)
+uTools是一个极简、插件化、跨平台的现代化桌面软件。通过自由选配丰富的插件，打造你得心应手的工具集合。
+通过快捷键（默认alt+space）就可以快速呼出这个搜索框。它相当聪明，可以支持输入、拖拽、自动粘贴等作为输入源，相应的插件也早已准备就绪，统一的设计风格和操作方式，助你高效的得到正确的结果。
+当你熟悉它后，能够为你节约大量时间，让你可以更加专注的改变世界。
+
+对比Alfred，他的不同就在于免费，使用简单，更符合国人的习惯。
