@@ -1,0 +1,184 @@
+## 大事件
+这个月的大事件是高通与苹果之间的专利大战。高通分别在中国和德国对苹果公司提起专利诉讼，结果均胜。苹果将在中国禁售iPhoneX及之前的机型。在德国则是全面禁售。
+加上新品手机的创新力度不够，导致苹果股票持续走低，四个月前，苹果还是首个突破万亿美元市值的上市公司，到现在股价已经下跌了 36%，市值只有 7160 亿美元，几个月内市值损失接近 3000 亿美元。
+![news.png](https://user-gold-cdn.xitu.io/2019/1/2/1680c5c00e13e66e?w=720&h=405&f=png&s=28795)
+
+## Tips
+### 更换启动图不生效
+**现象**：更换启动图，不生效，即使删除旧图，运行程序启动图仍然是之前的版本。
+尝试了删除app重装，clean、重启Xcode，删除DriverData，还试过挪图片位置，改名字，均无效。最后尝试了重启手机->再安装才正常。
+
+**问题分析**：这个是系统问题，为了加快程序启动的速度系统会把启动图做个缓存，之后每次启动是加载缓存启动图，所以才会出现修改不生效问题。但我们也并不知道系统会什么时候更新启动图，这个就有点尴尬😓
+stackoverflow上有关于这个问题的讨论：
+[iOS Keeping old launch screen and app icon after update](https://stackoverflow.com/questions/33002829/ios-keeping-old-launch-screen-and-app-icon-after-update)
+
+有人说这个不影响线上版本，从上线之后的测试来看，大部分用户没有受到影响，但还是出现了部分手机升级却未更换启动图的问题。
+因为是系统层面控制，没有太好的解决方案，如果有人遇到这个情况，需要注意一下。
+
+### 赋值权限
+在Mac 系统的终端上修改文件权限使用的是 Linux 中的 chmod 命令：
+r：可读，表示可以读取内容
+w:可写，表示可以编辑内容，但是不可以删除文件
+x: 可执行，表示可以执行文件。
+
+r:4
+w:2
+x:1
+rwx=4+2+1=7
+
+![rwx.png](https://user-gold-cdn.xitu.io/2019/1/2/1680c5c00e28ab91?w=332&h=314&f=png&s=17728)
+
+```shell
+$ chmod 777 file
+```
+这行命令的意思就是：文件所有者权限是7，同用户组的权限是7，其他非本地用户组的权限是7。同理可以出现这样的命令 chmod740.barshrc
+
+再讲两个：
+chmod u=rwx, go=rx .barshrc 这个命令中u表示拥有者，g表示group中的用户，o表示others，和上面的想对应。注意go=rx，这里go是拼接起来的，表示g和o的用户有读和执行的权限。
+```shell
+$ chmod a+w .barshrc
+```
+表示所有的用户（a表示all）增加写的权限。
+
+### App图片瘦身
+随着项目版本的不断迭代，会很容易积累越来越多的图片，对这些图片我们有两个主要方面可以优化：
+#### 1、删除不用的图片
+我们需要借助一个工具[LSUnusedResources](https://github.com/tinymind/LSUnusedResources)
+它可以检索项目中未使用的图片资源，我们可以指定检索图片的路径，后缀进行过滤。
+**注意**：无法区分png序列的引用。最好手动删除
+
+#### 2、图片压缩
+可以通过[ImageOptim](https://imageoptim.com/mac)，对图片进行无损压缩。使用时只需将要压缩的文件拖到程序中即可。
+如果图片较多时，可以借助其命令行工具：
+```
+/Applications/ImageOptim.app/Contents/MacOS/ImageOptim $file_name
+```
+对应的shell脚本:
+```
+# 处理文件名出现空格问题
+MY_IFS=$IFS
+IFS=$'\n'
+for file_name in $(find "$1" -name "*.png" -type f); do
+    echo $file_name
+    /Applications/ImageOptim.app/Contents/MacOS/ImageOptim $file_name
+done
+IFS=$MY_IFS
+```
+该工具还有一个Sketch插件：[Plugin for Sketch
+](https://imageoptim.com/sketch)，可以在输出icon的时候直接进行压缩优化。
+### 后台音频耗电问题
+**功能：**一段助眠音频可以后台播放，播放完成后如果返回app，会跳到对应的完成界面。
+**问题：**有用户反馈，听音频睡着了，早上醒来，电量掉了很多（40%）。
+**调研：**
+使用Xcode中 `Debug Navigator`栏的`Energy Debug Gauge`（需真机）测试。播放完成4分钟左右的后台耗电状态如下：
+![Energy Debug Gauge.png](https://user-gold-cdn.xitu.io/2019/1/2/1680c5c00e564097?w=1129&h=571&f=png&s=49407)
+分析可知虽然此时app停止了所有行为，但是生命周期仍处于`Background`状态，耗电量也还是存在的。暂时认为问题是客户端一直处于`Background`模式，并未被`Suspend`，导致一直被系统维护着，所以一直有耗电情况。
+
+再一次查看苹果关于后台模式的文档：
+> When the UIBackgroundModes key contains the audio value, the system’s media frameworks automatically prevent the corresponding app from being suspended when it moves to the background. As long as it is playing audio or video content or recording audio content, the app continues to run in the background. However, if recording or playback stops, the system suspends the app.
+
+可知，只要播放器未被销毁，就会一直占用后台模式！
+**解决方案：**
+在播放完成时销毁播放器。
+
+**检验：**
+再次观察播放音频完成一段时间之后的后台耗电情况：
+![image.png](https://user-gold-cdn.xitu.io/2019/1/2/1680c5c00e822328?w=959&h=570&f=png&s=47505)
+此时app被挂起，耗电量基本为0，唤醒app，仍能正常工作。问题解决。
+
+## 推荐阅读
+尝试分模块整理推荐阅读的内容
+### iOS开发过程中的设计模式
+![design pattern.jpeg](https://user-gold-cdn.xitu.io/2019/1/2/1680c5c00e6e29c4?w=329&h=153&f=jpeg&s=6322)
+>设计模式是一套被反复使用的、多数人知晓的、经过分类编目的、代码设计经验的总结。使用设计模式是为了重用代码、让代码更容易被他人理解、保证代码可靠性。 毫无疑问，设计模式于己于他人于系统都是多赢的，设计模式使代码编制真正工程化，设计模式是软件工程的基石，如同大厦的一块块砖石一样。项目中合理地运用设计模式可以完美地解决很多问题，每种模式在现实中都有相应的原理来与之对应，每种模式都描述了一个在我们周围不断重复发生的问题，以及该问题的核心解决方案，这也是设计模式能被广泛应用的原因。
+
+以上摘自[菜鸟教程](http://www.runoob.com/design-pattern/design-pattern-intro.html)
+
+[Swift中的策略模式](https://medium.com/flawless-app-stories/strategy-pattern-in-swift-1462dbddd9fe)
+从一个小例子入手，讲解策略模式在swift中的使用。
+
+[Swift 中的设计模式 #1 工厂方法与单例方法](https://swift.gg/2018/09/10/design-pattern-creational/)
+[Swift 中的设计模式 #2 观察者模式与备忘录模式](https://swift.gg/2018/11/26/design-pattern-behavorial/)
+[Swift 中的设计模式 #3 外观模式与适配器模式](https://swift.gg/2018/11/29/design-pattern-structural/)
+SwiftGG翻译组翻译的设计模式系列文章。
+
+[设计模式资料整理](https://github.com/skyming/Trip-to-iOS-Design-Patterns)
+应该是目前总结最全的适合iOS开发的设计模式资料汇总。
+
+### iOS逆向
+![apple-hook.png](https://user-gold-cdn.xitu.io/2019/1/2/1680c5c00e30fa95?w=500&h=281&f=png&s=13878)
+
+> iOS应用逆向工程，是指从目标应用的界面及功能表现入手，使用不同的工具和理论知识去分析其实现原理，得出应用的代码结构、整体设计、功能实现、执行流程等，然后利用iOS的系统知识和语言特性，借鉴或修改原有实现流程的技术。
+
+推荐两篇掘金上关于iOS逆向的文章：
+[TikTok(抖音国际版)逆向，全球的小姐姐们，我来啦！](https://juejin.im/post/5c19a38ae51d453e0a209256)
+[逆向 Mac 应用 Bartender](https://juejin.im/post/5bc425495188255c9d564044)
+这两篇都是通过具体实例入手，讲解逆向常用的工具和一些逆向的思路，非常适合新手。最好跟着介绍实际操作一番，第一次成功逆向一个项目之后，那种爽歪歪的感觉，你懂的！
+
+另外推荐一位逆向领域的牛人刘培庆（[博客](https://www.alonemonkey.com/)，[github](https://github.com/AloneMonkey)），了解逆向的同学大多应该都不陌生，iOS方面的逆向优先参照 **[MonkeyDev](https://github.com/AloneMonkey/MonkeyDev)**。
+刘总今年出了新书《iOS应用逆向与安全》，非常适合对逆向有兴趣的同学。
+
+### 利用脚本提高工作效率
+
+> 脚本语言（英语：Scripting language）是为了缩短传统的“编写、编译、链接、运行”（edit-compile-link-run）过程而创建的计算机编程语言。早期的脚本语言经常被称为批处理语言或工作控制语言。一个脚本通常是解释运行而非编译。脚本语言通常都有简单、易学、易用的特性，目的就是希望能让程序员快速完成程序的编写工作
+
+[AppleScript入门：探索macOS自动化](https://sspai.com/post/46912)
+
+文章选自少数派，讲述了：
+* 什么是 AppleScript？
+* 我使用 AppleScript 的情境
+* AppleScript 基础语法
+* AppleScript suite 之外的解法：模拟键鼠
+
+非常清晰详细的AppleScript入门文章。
+[如何提高工作效率 - 自动化篇](https://juejin.im/post/5bfac61ee51d454af013a900)
+文章选自掘金，串联Shell Script, Apple Script, Automator, Alfred & WorkFlows，告诉你如果灵活应用，达到利用脚本提高工作效率的目的。
+
+我写了一个利用AppleScript和Alfred的WorkFlows在命令行打开指定路径的工具。
+
+![workflow.png](https://user-gold-cdn.xitu.io/2019/1/2/1680c5c03e451304?w=1095&h=845&f=png&s=243925)
+
+```AppleScript
+on run argv
+  tell application "Finder"
+	-- get selection path
+	set pathFile to selection as text
+	set pathFile to get POSIX path of pathFile
+	-- fix space problem in the directory
+	set pathFile to quoted form of pathFile
+	tell application "Terminal"
+		activate
+		tell window 1
+			do script "cd " & pathFile
+		end tell
+	end tell
+end tell
+end run
+```
+
+使用方法是：点击选中文件夹，按下热键`CMD + T`。
+
+## 音视频
+**[创业那点事：听莲叔和羊叔回忆峥嵘岁月](https://talk.swift.gg/9)**
+莲叔和羊叔是 SwiftGG 翻译组的真·大佬。成绩好，学历高，思维缜密，能力很强。听过《升职加薪》那期节目的朋友应该都有印象。作为标准的技术人才，在创业大潮中自然也想试试身手，打拼一番。
+
+**[和 Cee 聊聊如何拿 Google Offer](https://talk.swift.gg/8)**
+翻译组里真是人才辈出啊，前几天 Cee 在群里说了个好消息，他拿到了美国 Google 的 Offer。群友们纷纷表示祝贺并进行了隆重的认哥仪式，将 SwiftGG 诞生以来第一个 GG（哥哥） 称号颁发给我们公认的大哥 Cee。
+
+以上两个音频来自于(ggtalk)[https://talk.swift.gg/]，也是我最近上下班路上用来消遣的音频节目，墙裂推荐！
+
+**[计算机科学速成课](https://www.bilibili.com/video/av21376839)**
+由[Carrie Anne Philbin](https://twitter.com/missphilbin)主讲，Carrie Anne Philbin是一名计算机科学教师和作家。她是树莓派基金会的教育主管，也是学校(CAS)多样性和包容组的主席。她为青少年写了电脑书《树莓派历险记》。特意介绍是因为我感觉这个课程因为这个主讲人的个人魅力而趣味十足😄。不管你是不是计算机专业的学生，看过之后应该都能有所收获。
+
+## Github
+### [12306ForMac](https://github.com/fancymax/12306ForMac)
+以前要么开Windows虚拟机，要么使用官方Web，现在可以使用12306ForMac订票助手啦。希望对大家有所帮助！
+
+###  [LongestCocoa](https://github.com/Quotation/LongestCocoa)
+SoWhatIsTheLongestMethodOrConstantNamesInCocoaFramework? （那么，Cocoa框架中最长的方法名或常量名是什么？）答案是：
+
+* outputImageProviderFromBufferWithPixelFormat:pixelsWide:pixelsHigh:baseAddress:bytesPerRow:releaseCallback:releaseContext:colorSpace:shouldColorMatch:
+
+* kCMSampleBufferConduitNotificationParameter_UpcomingOutputPTSRangeMayOverlapQueuedOutputPTSRange
+
+这个项目有一定的调侃意味，so what? 我选择swift🤣
